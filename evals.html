@@ -1,0 +1,62 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Evals · Ledger</title><style>
+:root{color-scheme:light}*{box-sizing:border-box}
+body{margin:0;background:#f4f4f2;color:#18181b;font:16px/1.6 "Inter",-apple-system,"Segoe UI",Roboto,Calibri,sans-serif}
+.page{max-width:980px;margin:32px auto;background:#fff;border:1px solid #e6e6e3;border-radius:6px;padding:48px 56px}
+h1{font-size:26px;letter-spacing:-.02em;margin:0 0 4px}.meta{color:#71717a;font-size:14px;margin-bottom:28px}
+h2{font-size:18px;margin:32px 0 10px}h3{font-size:15px;margin:22px 0 6px}
+blockquote{margin:0 0 18px;padding:14px 18px;background:#fafaf9;border-left:3px solid #18181b;border-radius:2px}
+table{width:100%;border-collapse:collapse;font-size:14px;margin:8px 0 16px}
+th,td{border:1px solid #e6e6e3;padding:8px 10px;text-align:left;vertical-align:top}th{background:#fafaf9;font-weight:600}
+code{font-family:ui-monospace,Consolas,monospace;font-size:13px;background:#f4f4f2;padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+td code{white-space:nowrap}a{color:#1a56db}ul{padding-left:22px}li{margin:4px 0}.scroll{overflow-x:auto}
+@media(max-width:640px){.page{margin:0;border:0;border-radius:0;padding:28px 20px}}
+@media print{body{background:#fff}.page{border:0;margin:0;padding:0}}
+</style></head><body><div class="page"><h1>Evals: how I tested Ledger</h1>
+<div class="meta">All tests ran in Chrome on the deployed app (in-browser OCR, no server) · <a href="./">Open the app</a></div>
+
+<h2>1. Extraction accuracy on real Agnirath bills</h2>
+<p>Each bill was uploaded and the auto-filled form was compared with the actual invoice.</p>
+<div class="scroll"><table>
+<tr><th>Bill</th><th>Type</th><th>Vendor</th><th>Date</th><th>Amount</th><th>Vendor GSTIN</th><th>Billed to</th><th>Result</th></tr>
+<tr><td>Higher Energizer: 65 Li-ion cells</td><td>Proforma PDF, seller details at the bottom</td><td>✅</td><td>✅ 02 Aug 2025</td><td>✅ ₹35,872</td><td>✅ <code>33BLHPA2289L1Z1</code></td><td>✅ IITM Students Activities Trust … 600036</td><td><b>All correct</b>, 0.9 s</td></tr>
+<tr><td>Hayael Aerospace: carbon fibre</td><td>Tax invoice PDF, Bill To / Ship To side by side</td><td>✅</td><td>✅ 11 Apr 2025</td><td>✅ ₹82,305</td><td>✅ <code>33AAECH9691R1ZO</code></td><td>✅ IIT Madras, ICSR … 600036 (Ship To copy removed)</td><td><b>All correct</b>, 0.7 s</td></tr>
+<tr><td>SunPower: 600 solar cells</td><td>2-page commercial invoice in USD</td><td>✅</td><td>✅ 3 Jun 2025 (flagged "check this")</td><td>✅ USD 3,034</td><td>✅ none (foreign vendor)</td><td>✅ Team AgniRath, IITM SAT … 600036</td><td><b>Correct</b>; invoice no. not found (left for the user)</td></tr>
+<tr><td>Hayael bill as a phone photo (tilted, shadowed, blurred)</td><td>Image, full OCR</td><td>✅</td><td>✅</td><td>✅ ₹82,305</td><td>✅ after auto-repair (OCR read 9 as O)</td><td>✅</td><td><b>All core fields correct</b>, ~5–6 s</td></tr>
+</table></div>
+<p>GST split checks:</p>
+<ul>
+<li><b>Higher Energizer:</b> ₹30,400 + IGST ₹5,472 = ₹35,872 ✅</li>
+<li><b>Hayael:</b> ₹69,750 + CGST ₹6,277.50 + SGST ₹6,277.50 = ₹82,305 ✅</li>
+<li><b>Hayael photo:</b> OCR garbled the CGST line, so the app filled it from SGST (intra-state GST is always split equally) and marked it for review.</li>
+</ul>
+
+<h2>2. GST number handling</h2>
+<table>
+<tr><th>Case</th><th>Expected</th><th>Result</th></tr>
+<tr><td>Valid GSTINs on all three bills</td><td>Checksum passes, state shown (Tamil Nadu)</td><td>✅</td></tr>
+<tr><td>SunPower bill prints the team GSTIN with a typo: <code>33AABT11571M1ZM</code></td><td>Corrected to <code>33AABTI1571M1ZM</code></td><td>✅</td></tr>
+<tr><td>OCR reads <code>33AAECHO691R1ZO</code> on the photo</td><td>Repaired to <code>33AAECH9691R1ZO</code></td><td>✅</td></tr>
+<tr><td>Seller vs. buyer GSTIN on the same bill</td><td>The team's GSTIN is never saved as the vendor's</td><td>✅ on all 3 bills</td></tr>
+<tr><td>User types a wrong GSTIN</td><td>Live warning: "Checksum doesn't match"</td><td>✅</td></tr>
+</table>
+
+<h2>3. Workflow checks</h2>
+<table>
+<tr><th>Test</th><th>Expected</th><th>Result</th></tr>
+<tr><td><b>Clicks to upload a bill (North Star)</b></td><td>Fewer than the old 10-question Google Form</td><td>✅ <b>4 taps</b> after the photo: Add → pick photo/file → Paid by → Save. No typing when OCR is right.</td></tr>
+<tr><td>Saving without "Paid by" or the reimbursement choice</td><td>Blocked, missing field highlighted</td><td>✅</td></tr>
+<tr><td>Paid by a member + "Reimbursement needed"</td><td>Appears under Owed to members with the amount</td><td>✅</td></tr>
+<tr><td>Mark that bill "Reimbursed"</td><td>Removed from Owed to members</td><td>✅</td></tr>
+<tr><td>Paid by Team account</td><td>Shown as "No claim", not owed to anyone</td><td>✅</td></tr>
+<tr><td>Same bill uploaded twice (PDF, then a photo of it)</td><td>Duplicate warning naming the saved bill and who paid</td><td>✅</td></tr>
+<tr><td>USD bill</td><td>Kept out of ₹ totals, shown separately</td><td>✅</td></tr>
+<tr><td>Export</td><td>CSV of all bills downloads</td><td>✅</td></tr>
+</table>
+
+<h2>4. Known limitations</h2>
+<ul>
+<li>Item names and line items are not extracted yet.</li>
+<li>Invoice numbers laid out in a table header (the SunPower layout) are not picked up.</li>
+<li>Badly damaged photos can lose single lines; those fields are flagged for the user to check.</li>
+</ul></div></body></html>
